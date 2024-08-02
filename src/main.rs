@@ -1,4 +1,4 @@
-use std::{os::windows::raw::SOCKET, sync::Mutex};
+use std::sync::Mutex;
 
 use article::Article;
 use casopis::Casopis;
@@ -31,7 +31,7 @@ async fn main() {
 
     for article in articles.lock().unwrap().iter() {
         if let Some(time) = last_time {
-            if (article.data > time) {
+            if article.data > time {
                 last_time = Some(article.data);
             }
         } else {
@@ -40,7 +40,7 @@ async fn main() {
     }
 
     loop {
-        log::warn!("last {:?}", last_time);
+        log::info!("Update with time {:?}", last_time);
         update_articles(&articles).await;
         let mut newest_time: Option<DateTime<Utc>> = None;
         for article in articles.lock().unwrap().iter() {
@@ -59,8 +59,7 @@ async fn main() {
             }
 
             let message = article.message().unwrap();
-            log::info!("Sending article {}", article.id);
-            log::warn!("{:?}", article.data);
+            log::info!("Sending article {}, {}", article.id, article.data);
             send_news(&webhook.lock().unwrap(), &message).await.unwrap();
             std::thread::sleep(std::time::Duration::from_secs(1)); // 1 sec
         }

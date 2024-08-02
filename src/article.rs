@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
-use html2md::{images, parse_html};
-use scraper::{ElementRef, Html, Selector};
+use html2md::parse_html;
+use scraper::{Html, Selector};
 use webhook::models::Message;
 
-use crate::{error::Result, main};
+use crate::error::Result;
 
 #[derive(Clone, Debug)]
 pub struct Article {
@@ -51,12 +51,11 @@ impl Article {
         let poster_url = match document
             .select(&Selector::parse(".b-shiki_wall > .b-image").unwrap())
             .enumerate()
-            .next(){
-                Some(value) => Some(value.1
-                .attr("href")
-                .unwrap().to_string()),
-                None => None
-            };
+            .next()
+        {
+            Some(value) => Some(value.1.attr("href").unwrap().to_string()),
+            None => None,
+        };
         let data = document
             .select(&Selector::parse(".section.created_at > time").unwrap())
             .enumerate()
@@ -83,7 +82,7 @@ impl Article {
             .username("Relobo")
             .avatar_url(&image_url)
             .embed(|embed| {
-                if let Some(poster_url) = &self.poster_url{
+                if let Some(poster_url) = &self.poster_url {
                     embed.image(&poster_url);
                 }
                 embed
@@ -98,70 +97,4 @@ impl Article {
             });
         return Ok(message);
     }
-}
-
-fn html_to_markdown(element: ElementRef) -> String {
-    let mut markdown = String::new();
-    let mut stack = vec![element];
-    let mut newline = false;
-
-    while let Some(el) = stack.pop() {
-        match el.value().name() {
-            "a" => {
-                let text: String = el.text().collect();
-                if let Some(href) = el.value().attr("href") {
-                    markdown.push_str(&format!("[{}]({})", text, href));
-                } else {
-                    markdown.push_str(&text);
-                }
-            }
-            "p" | "div" => {
-                if newline {
-                    markdown.push_str("\n\n");
-                }
-                for child in el.children().rev() {
-                    if let Some(child_el) = ElementRef::wrap(child) {
-                        stack.push(child_el);
-                    } else if let Some(text) = child.value().as_text() {
-                        markdown.push_str(text);
-                    }
-                }
-                newline = true;
-            }
-            "br" => markdown.push_str("\n"),
-            "strong" => {
-                markdown.push_str("**");
-                for child in el.children().rev() {
-                    if let Some(child_el) = ElementRef::wrap(child) {
-                        stack.push(child_el);
-                    } else if let Some(text) = child.value().as_text() {
-                        markdown.push_str(text);
-                    }
-                }
-                markdown.push_str("**");
-            }
-            "em" => {
-                markdown.push_str("_");
-                for child in el.children().rev() {
-                    if let Some(child_el) = ElementRef::wrap(child) {
-                        stack.push(child_el);
-                    } else if let Some(text) = child.value().as_text() {
-                        markdown.push_str(text);
-                    }
-                }
-                markdown.push_str("_");
-            }
-            _ => {
-                for child in el.children().rev() {
-                    if let Some(child_el) = ElementRef::wrap(child) {
-                        stack.push(child_el);
-                    } else if let Some(text) = child.value().as_text() {
-                        markdown.push_str(text);
-                    }
-                }
-            }
-        }
-    }
-
-    markdown
 }
