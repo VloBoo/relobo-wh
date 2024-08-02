@@ -45,7 +45,7 @@ async fn main() {
         let mut newest_time: Option<DateTime<Utc>> = None;
         for article in articles.lock().unwrap().iter() {
             if let Some(time) = last_time {
-                if (article.data <= time) {
+                if article.data <= time {
                     continue;
                 } else {
                     newest_time = Some(article.data);
@@ -53,7 +53,7 @@ async fn main() {
             }
 
             if let Some(time) = newest_time {
-                if (article.data > time) {
+                if article.data > time {
                     newest_time = Some(article.data);
                 }
             }
