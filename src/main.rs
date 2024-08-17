@@ -17,8 +17,8 @@ async fn main() {
     log::info!("Start relobo-wh!");
 
     let config = Config::builder()
-        //.add_source(config::File::with_name("/etc/relobo/config.toml"))
-        .add_source(config::File::with_name("./config.toml"))
+        .add_source(config::File::with_name("/etc/relobo/config.toml"))
+        //.add_source(config::File::with_name("./config.toml"))
         .build()
         .unwrap();
     let webhook_url: String = config.get("webhook").unwrap();
@@ -69,7 +69,7 @@ async fn main() {
             None => last_time,
         };
 
-        std::thread::sleep(std::time::Duration::from_secs(300)); // 5 minutes
+        std::thread::sleep(std::time::Duration::from_secs(900)); // 15 minutes
     }
 }
 
