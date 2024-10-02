@@ -1,15 +1,14 @@
-use std::sync::Mutex;
-
 use article::Article;
 use casopis::Casopis;
 use chrono::{DateTime, Utc};
 use config::Config;
 use error::{Error, Result};
-use scraper::{Html, Selector};
+use shikimori::Shikimori;
 use webhook::{client::WebhookClient, models::Message};
 
 mod article;
 mod error;
+mod shikimori;
 
 #[tokio::main]
 async fn main() {
@@ -22,14 +21,18 @@ async fn main() {
         .build()
         .unwrap();
     let webhook_url: String = config.get("webhook").unwrap();
-    let webhook = Mutex::new(WebhookClient::new(&webhook_url));
+    let duration: u64 = config.get("duration").unwrap();
+
+    let webhook = WebhookClient::new(&webhook_url);
+
+    let shikimori = Shikimori::new().unwrap();
 
     let mut last_time: Option<DateTime<Utc>> = None;
-    let articles: Mutex<Vec<Article>> = Mutex::new(Vec::new());
+    let mut articles: Vec<Article> = vec![];
 
-    update_articles(&articles).await;
+    update_articles(&shikimori, &mut articles).await;
 
-    for article in articles.lock().unwrap().iter() {
+    for article in articles.iter() {
         if let Some(time) = last_time {
             if article.data > time {
                 last_time = Some(article.data);
@@ -40,10 +43,11 @@ async fn main() {
     }
 
     loop {
-        log::info!("Update with time {:?}", last_time);
-        update_articles(&articles).await;
+        log::debug!("Update with time {:?}", last_time);
+        update_articles(&shikimori, &mut articles).await;
         let mut newest_time: Option<DateTime<Utc>> = None;
-        for article in articles.lock().unwrap().iter() {
+
+        for article in articles.iter() {
             if let Some(time) = last_time {
                 if article.data <= time {
                     continue;
@@ -60,8 +64,7 @@ async fn main() {
 
             let message = article.message().unwrap();
             log::info!("Sending article {}, {}", article.id, article.data);
-            send_news(&webhook.lock().unwrap(), &message).await.unwrap();
-            std::thread::sleep(std::time::Duration::from_secs(1)); // 1 sec
+            send_news(&webhook, &message).await.unwrap();
         }
 
         last_time = match newest_time {
@@ -69,45 +72,38 @@ async fn main() {
             None => last_time,
         };
 
-        std::thread::sleep(std::time::Duration::from_secs(900)); // 15 minutes
+        std::thread::sleep(std::time::Duration::from_secs(duration)); // 15 minutes
     }
 }
 
-async fn update_articles(articles: &Mutex<Vec<Article>>) {
-    let mut articles = articles.lock().unwrap();
+async fn update_articles(shikimori: &Shikimori, articles: &mut Vec<Article>) {
+    //let mut articles = articles.lock().unwrap();
+    let articles_id = shikimori.get_ids().await.unwrap();
 
-    let client = reqwest::Client::builder()
-    .user_agent("Relobo, Discord anime news bot (If you want the bot to visit your site, please email me: vlobo2004@gmail.com)")
-    .build()
-    .unwrap();
-    let request = client
-        .get("https://shikimori.one/forum/news")
-        .build()
-        .unwrap();
-    let response = client.execute(request).await.unwrap();
-    let body = response.text().await.unwrap();
-    let document = Html::parse_document(&body);
-    let selector = Selector::parse("article").unwrap();
-
-    'elem: for element in document.select(&selector) {
-        std::thread::sleep(std::time::Duration::from_secs(1)); // 1 sec
-        let id: i64 = element.attr("id").unwrap().parse().unwrap();
-        let url: String = element.attr("data-url").unwrap().parse().unwrap();
+    'elem: for article_id in articles_id {
         for article in articles.iter() {
-            if article.id == id {
+            if article.id == article_id {
                 continue 'elem;
             }
         }
-        log::info!("Created {}", id);
-        articles.push(Article::parse(id, url).await);
+        log::info!("Created {}", article_id);
+        let article = match shikimori.get_article(article_id).await {
+            Ok(value) => value,
+            Err(error) => {
+                log::error!("Не удалось создать статью: {:?}", error);
+                continue 'elem;
+            }
+        };
+        articles.push(article);
     }
 
-    articles.sort_by(|ar1, ar2| ar1.data.cmp(&ar2.data));
+    articles.sort_by(|ar1, ar2| ar2.data.cmp(&ar1.data));
 }
 
 async fn send_news(webhook: &WebhookClient, message: &Message) -> Result<()> {
-    match webhook.send_message(&message).await {
-        Err(error) => Err(Error::Webhook(error.to_string())),
-        Ok(_) => Ok(()),
-    }
+    webhook
+        .send_message(&message)
+        .await
+        .map_err(|e| Error::Webhook(format!("{:?}", e)))?;
+    return Ok(());
 }

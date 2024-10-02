@@ -1,6 +1,4 @@
 use chrono::{DateTime, Utc};
-use html2md::parse_html;
-use scraper::{Html, Selector};
 use webhook::models::Message;
 
 use crate::error::Result;
@@ -16,64 +14,6 @@ pub struct Article {
 }
 
 impl Article {
-    pub async fn parse<'a>(id: i64, url: String) -> Self {
-        //let url = element.select(&Selector::parse("article").unwrap()).enumerate().last();
-
-        let client = reqwest::Client::builder()
-        .user_agent("Relobo, Discord anime news bot (If you want the bot to visit your site, please email me: vlobo2004@gmail.com)")
-        .build()
-        .unwrap();
-        let request = client.get(url.clone()).build().unwrap();
-        let response = client.execute(request).await.unwrap();
-        let body = response.text().await.unwrap();
-        let document = Html::parse_document(&body);
-
-        //log::info!("{:#?}", body);
-
-        let title = document
-            .select(&Selector::parse("h1").unwrap())
-            .enumerate()
-            .last()
-            .unwrap()
-            .1
-            .text()
-            .collect();
-        let text = parse_html(
-            document
-                .select(&Selector::parse("div.body-inner").unwrap())
-                .enumerate()
-                .last()
-                .unwrap()
-                .1
-                .inner_html()
-                .as_str(),
-        );
-        let poster_url = match document
-            .select(&Selector::parse(".b-shiki_wall > .b-image").unwrap())
-            .enumerate()
-            .next()
-        {
-            Some(value) => Some(value.1.attr("href").unwrap().to_string()),
-            None => None,
-        };
-        let data = document
-            .select(&Selector::parse(".section.created_at > time").unwrap())
-            .enumerate()
-            .last()
-            .unwrap()
-            .1
-            .attr("datetime")
-            .unwrap();
-        Article {
-            id,
-            url: url.clone(),
-            title,
-            text,
-            poster_url,
-            data: data.parse().unwrap(),
-        }
-    }
-
     pub fn message(&self) -> Result<Message> {
         let image_url = "https://vlobo.site/1-64.png";
 
@@ -94,7 +34,11 @@ impl Article {
                 //.thumbnail(IMAGE_URL)
                 //.author("Lmao#0001", Some(String::from(IMAGE_URL)), Some(String::from(IMAGE_URL)))
                 //.field("name", "value", false)
-            });
+            })
+            //.action_row(|action_row| {
+            //    action_row.link_button(|button| button.url(&self.url).label("Читать оригинал"))
+            //})
+            ;
         return Ok(message);
     }
 }
